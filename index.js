@@ -29,6 +29,9 @@ app.post('/auth/', (req, res) => {
         }
     })
 })
+app.get('/', function (req, res) {
+    res.send('works')
+})
 app.get('/add-contact/', function (req, res) {
     for (let i = 0; i < 3000; i++) {
         db.collection('contact').insert({
