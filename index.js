@@ -5,9 +5,13 @@ var io = require('socket.io')(http);
 var MongoClient = require('mongodb').MongoClient;
 // var url = 'mongodb://admin:100_Begem0ts@ds135844.mlab.com:35844/crm1';
 var url = require('./db').url;
+var inProduction = require('./db').inProduction
 var db;
 var ObjectId = require('mongodb').ObjectID;
 var hash = require('object-hash')
+
+
+const { APP_PORT, APP_IP, APP_PATH } = process.env;
 
 app.use(bodyParser.urlencoded({
     extended: true,
@@ -112,9 +116,15 @@ io.on('connection', function (socket) {
 MongoClient.connect(url).then((result) => {
     console.log("Connected successfully to server");
     db = result.db('crm1');
-    http.listen(3000, function () {
-        console.log('listening on *:3000');
-    });
+    if (!inProduction){
+        http.listen(3000, function () {
+            console.log('listening on *:3000');
+        });
+    } else {
+        http.listen(APP_PORT, APP_IP, () => {
+            console.log(`Server running at http://${APP_IP}:${APP_PORT}/`);
+        });
+    }
 }).catch((error) => {
     console.log(error)
 })
