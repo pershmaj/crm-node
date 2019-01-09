@@ -70,12 +70,16 @@ io.on('connection', function (socket) {
     })
 
     socket.on('update', (msg) => {
-        var id = msg.data._id
+        let id = msg.data._id
         delete msg.data._id
         db.collection(msg.ent).findOneAndUpdate({_id: ObjectId(id)},
             {$set: msg.data}).then((result) => {
-            msg.data._id = id
-            io.emit('update', {ent: msg.ent, data: msg.data})
+                console.log(result)
+                if(result.ok){
+                    msg.data._id = id
+                    io.emit('update', {ent: msg.ent, data: msg.data})
+                }
+                else console.log(result)
         }).catch((err) => console.log(err))
     })
 
