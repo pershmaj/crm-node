@@ -1,4 +1,5 @@
 var app = require('express')()
+var session = require('express-session')
 var bodyParser = require('body-parser')
 var http = require('http').Server(app)
 var io = require('socket.io')(http)
@@ -17,6 +18,7 @@ var SENDER_EMAIL = require('./db').SENDER_EMAIL
 
 const { APP_PORT, APP_IP, APP_PATH } = process.env;
 
+app.use(session);
 app.use(bodyParser.urlencoded({
     extended: true,
 }))
@@ -38,10 +40,12 @@ app.post('/auth/', (req, res) => {
     })
 })
 app.get('/', function (req, res) {
+    console.log(req)
     res.send('works')
 })
 
 io.on('connection', function (socket) {
+    console.log('im here')
     socket.on('init', (msg) => {
         let counter = 0
         // цикл, поиск по дб и эмит вызываются асинхронно,
@@ -64,7 +68,7 @@ io.on('connection', function (socket) {
 
     socket.on('delete', (msg) => {
         db.collection(msg.ent).findOneAndDelete({_id: ObjectId(msg.data)}).then((result) => {
-            console.log(result)
+            // console.log(result)
             io.emit('delete', {ent: msg.ent, data: msg.data})
         }).catch((err) => console.log(err))
     })
@@ -74,7 +78,7 @@ io.on('connection', function (socket) {
         delete msg.data._id
         db.collection(msg.ent).findOneAndUpdate({_id: ObjectId(id)},
             {$set: msg.data}).then((result) => {
-                console.log(result)
+                // console.log(result)
                 if(result.ok){
                     msg.data._id = id
                     io.emit('update', {ent: msg.ent, data: msg.data})
