@@ -9,6 +9,7 @@ var inProduction = require('./db').inProduction
 var db
 var ObjectId = require('mongodb').ObjectID
 var hash = require('object-hash')
+var uniqid = require('uniqid')
 var sendpulse = require('sendpulse-api')
 var API_USER_ID = require('./db').API_USER_ID
 var API_SECRET = require('./db').API_SECRET
@@ -18,7 +19,6 @@ var SENDER_EMAIL = require('./db').SENDER_EMAIL
 
 const { APP_PORT, APP_IP, APP_PATH } = process.env;
 
-app.use(session);
 app.use(bodyParser.urlencoded({
     extended: true,
 }))
@@ -29,36 +29,58 @@ app.use(function (req, res, next) {
     next();
 });
 
+app.sessions = []
+
 app.post('/auth/', (req, res) => {
     let data = req.body
-    db.collection('user').findOne({login: data.username}).then((result) => {
-        if(hash(data.password) === result.password){
-            res.send(result)
-        } else {
-            res.send({failed: true})
+    if(data.token) {
+        let session = app.sessions.find((el) => {
+            return el.token === data.token
+        })
+        if(session){
+            res.send(session)
         }
-    })
+    } else {
+        db.collection('user').findOne({login: data.username}).then((result) => {
+            if(hash(data.password) === result.password){
+                result.token = uniqid()
+                result.password = ""
+                app.sessions.push(result)
+                res.send(result)
+            } else {
+                res.send({failed: true})
+            }
+        })
+    }
 })
 app.get('/', function (req, res) {
     console.log(req)
     res.send('works')
 })
 
+
+
 io.on('connection', function (socket) {
-    console.log('im here')
     socket.on('init', (msg) => {
         let counter = 0
+        let token = app.sessions.find((el) => {
+            return el.token === msg.token
+        })
+        if(token){
+            msg.ent.forEach((ent, iter, arr) => {
+                db.collection(ent).find({}).toArray((err, docs) => {
+                    socket.emit('init', {ent: ent, data: docs})
+                    counter++ // считаем сколько отработало
+                    if (counter === arr.length) { //если последний, то
+                        socket.emit('inited', {result: true})
+                    }
+                })
+            })
+        } else {
+            socket.emit('inited', {result: false})
+        }
         // цикл, поиск по дб и эмит вызываются асинхронно,
         // надо узнать когда подгрузится последняя коллекция элементов
-        msg.ent.forEach((ent, iter, arr) => {
-            db.collection(ent).find({}).toArray((err, docs) => {
-                socket.emit('init', {ent: ent, data: docs})
-                counter++ // считаем сколько отработало
-                if (counter === arr.length) { //если последний, то
-                    socket.emit('inited')
-                }
-            })
-        })
     })
 
     socket.on('add', (msg) => {
@@ -78,7 +100,6 @@ io.on('connection', function (socket) {
         delete msg.data._id
         db.collection(msg.ent).findOneAndUpdate({_id: ObjectId(id)},
             {$set: msg.data}).then((result) => {
-                // console.log(result)
                 if(result.ok){
                     msg.data._id = id
                     io.emit('update', {ent: msg.ent, data: msg.data})
@@ -108,10 +129,9 @@ io.on('connection', function (socket) {
                         }
                     }, book.id, msg.emails)
                 }
-            }, hash(Date.now()))
+            }, uniqid())
         });
     })
-
 });
 
 MongoClient.connect(url).then((result) => {
